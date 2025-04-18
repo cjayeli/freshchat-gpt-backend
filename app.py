@@ -23,13 +23,13 @@ def generate():
     try:
         client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=messages,
-    temperature=0.7
+        response = client.chat.completions.create(
+        model="gpt-4",
+        messages=messages,
+        temperature=0.7
 )
 
-reply = response.choices[0].message.content.strip()
+        reply = response.choices[0].message.content.strip()
         return jsonify({"suggestions": [reply]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
