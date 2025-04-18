@@ -33,4 +33,5 @@ def generate():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run()
+    # Bind to 0.0.0.0 to allow external access on Render
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
