@@ -4,14 +4,21 @@ import openai
 import os
 
 app = Flask(__name__)
-CORS(app, origins=["chrome-extension://iniphhmeaookpglagapfooggoicinepe"])
+
+# ✅ Fix: Allow CORS from Chrome extension with credentials support
+CORS(app, supports_credentials=True, origins=["chrome-extension://iniphhmeaookpglagapfooggoicinepe"])
 
 client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-@app.route('/generate', methods=['POST'])
+# ✅ Fix: Add 'OPTIONS' to methods so preflight passes
+@app.route('/generate', methods=['POST', 'OPTIONS'])
 def generate():
+    if request.method == 'OPTIONS':
+        # ✅ Allow browser preflight checks to succeed
+        return jsonify({}), 200
+
     try:
-        # Force parse JSON body
+        # ✅ Force parse JSON from the POST body
         data = request.get_json(force=True)
 
         if not isinstance(data, dict):
