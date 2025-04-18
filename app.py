@@ -13,7 +13,7 @@ client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 def generate():
     try:
         # Parse raw JSON body safely
-        data = json.loads(request.data)
+        data = request.get_json(force=True)
         conversation = data.get("conversation", [])
 
         if not conversation:
