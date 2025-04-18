@@ -3,7 +3,11 @@ services:
     name: gpt-backend
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python app.py"
+    # Use Gunicorn to run the 'app' object in the 'app.py' file
+    startCommand: "gunicorn app:app"
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      # Optional: Tell Render which port Gunicorn uses (defaults often work)
+      # - key: PORT
+      #   value: 10000
