@@ -1,39 +1,48 @@
-# app.py (Updated)
-from flask import Flask, request, jsonify # Removed make_response as it's not used
+# app.py (Updated with Logging and Test Route)
+from flask import Flask, request, jsonify
 import openai
 import os
-from flask_cors import CORS # <-- Import CORS
+from flask_cors import CORS
+import logging # <-- Import logging
+
+# --- Setup basic logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+# ---
 
 app = Flask(__name__)
-CORS(app) # <-- Initialize CORS for your app
+CORS(app)
 
-# Remove the manual @app.after_request decorator below
-# @app.after_request
-# def apply_cors_headers(response):
-#     response.headers['Access-Control-Allow-Origin'] = '*'
-#     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-#     response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-#     return response
+logging.info("Flask app initializing...") # <-- Log startup
 
 client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+logging.info("OpenAI client initialized.") # <-- Log after client init
 
-# Remove 'OPTIONS' from methods and the explicit check, Flask-CORS handles it
+# --- Add a simple test route for '/' ---
+@app.route('/', methods=['GET'])
+def root():
+    logging.info("Root route '/' accessed.") # <-- Log access to '/'
+    return jsonify({"message": "Backend is running!"})
+# ---
+
 @app.route('/generate', methods=['POST'])
 def generate():
-    # No need for: if request.method == 'OPTIONS': return jsonify({}), 200
-
+    logging.info("'/generate' route accessed.") # <-- Log access to '/generate'
     try:
+        # --- Keep existing print statements for now, add logging ---
         data = request.get_json(force=True)
+        logging.info(f"Received request data type: {type(data)}")
 
         if not isinstance(data, dict):
+            logging.error(f"Invalid JSON format received: {type(data)}") # <-- Log error
             print("❌ Expected JSON object, got:", type(data))
             return jsonify({"error": "Invalid JSON format"}), 400
 
         conversation = data.get("conversation", [])
-        print("✅ Received conversation:", conversation)
+        logging.info(f"Received conversation length: {len(conversation)}") # <-- Log conversation info
+        print("✅ Received conversation:", conversation) # Keep for now
 
         if not conversation:
-             # Consider if 400 is right, or maybe 200 with an empty suggestion?
+            logging.warning("No message history provided.") # <-- Log warning
             return jsonify({"suggestions": ["No message history provided."]}), 400
 
         messages = [
@@ -43,23 +52,27 @@ def generate():
             }
         ] + conversation
 
+        logging.info("Calling OpenAI API...") # <-- Log before API call
         gpt_response = client.chat.completions.create(
             model="gpt-4",
             messages=messages,
             temperature=0.7
         )
+        logging.info("Received response from OpenAI API.") # <-- Log after API call
 
         reply = gpt_response.choices[0].message.content.strip()
         return jsonify({ "suggestions": [reply] })
 
     except Exception as e:
-        print("❌ GPT Error:", str(e))
-        # Flask-CORS usually adds headers to error responses too
+        logging.exception("An error occurred in /generate endpoint") # <-- Log exception with traceback
+        print("❌ GPT Error:", str(e)) # Keep for now
         return jsonify({ "error": str(e) }), 500
 
+logging.info("Flask app routes defined.") # <-- Log after routes
+
+# Note: The if __name__ == '__main__': block is not executed by Gunicorn
+# Gunicorn imports the 'app' object directly.
+# So, the logging.info below won't appear when running with Gunicorn.
 if __name__ == '__main__':
-    # Render uses its own web server (like Gunicorn usually),
-    # so this app.run is mainly for local testing.
-    # Render uses the startCommand from render.yaml: "python app.py"
-    # Ensure the production server handles requests correctly.
+    logging.info("Starting Flask development server (for local testing only)...")
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
