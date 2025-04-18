@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
 import os
-import json
 
 app = Flask(__name__)
 CORS(app)
@@ -12,9 +11,15 @@ client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        # Parse raw JSON body safely
+        # Force parse JSON body
         data = request.get_json(force=True)
+
+        if not isinstance(data, dict):
+            print("❌ Expected JSON object, got:", type(data))
+            return jsonify({"error": "Invalid JSON format"}), 400
+
         conversation = data.get("conversation", [])
+        print("✅ Received conversation:", conversation)
 
         if not conversation:
             return jsonify({"suggestions": ["No message history provided."]}), 400
@@ -40,5 +45,4 @@ def generate():
         return jsonify({ "error": str(e) }), 500
 
 if __name__ == '__main__':
-    # Render binds to this dynamically
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
