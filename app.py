@@ -1,0 +1,36 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import openai
+import os
+
+app = Flask(__name__)
+CORS(app)
+
+openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    data = request.json
+    conversation = data.get("conversation", [])
+
+    if not conversation:
+        return jsonify({"suggestions": ["No message history provided."]}), 400
+
+    messages = [
+        {"role": "system", "content": "You are a helpful customer support assistant. Reply based only on recent customer messages after CSAT."}
+    ] + conversation
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",  # or "gpt-3.5-turbo"
+            messages=messages,
+            temperature=0.7
+        )
+
+        reply = response.choices[0].message.content.strip()
+        return jsonify({"suggestions": [reply]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run()
