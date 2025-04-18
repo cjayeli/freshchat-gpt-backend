@@ -4,7 +4,7 @@ import openai
 import os
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["chrome-extension://iniphhmeaookpglagapfooggoicinepe"])
 
 client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
