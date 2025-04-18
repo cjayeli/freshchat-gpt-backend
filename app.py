@@ -5,20 +5,23 @@ import os
 
 app = Flask(__name__)
 
-# ✅ Fix: Allow CORS from Chrome extension with credentials support
-CORS(app, supports_credentials=True, origins=["chrome-extension://iniphhmeaookpglagapfooggoicinepe"])
+# ✅ Allow any origin for now (for debugging); you can restrict later
+CORS(app, resources={r"/generate": {"origins": "*"}}, supports_credentials=True)
 
 client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# ✅ Fix: Add 'OPTIONS' to methods so preflight passes
 @app.route('/generate', methods=['POST', 'OPTIONS'])
 def generate():
     if request.method == 'OPTIONS':
-        # ✅ Allow browser preflight checks to succeed
-        return jsonify({}), 200
+        # ✅ Respond to CORS preflight request
+        response = jsonify({})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return response, 200
 
     try:
-        # ✅ Force parse JSON from the POST body
+        # ✅ Parse JSON body
         data = request.get_json(force=True)
 
         if not isinstance(data, dict):
@@ -45,11 +48,15 @@ def generate():
         )
 
         reply = response.choices[0].message.content.strip()
-        return jsonify({ "suggestions": [reply] })
+        json_response = jsonify({ "suggestions": [reply] })
+        json_response.headers.add("Access-Control-Allow-Origin", "*")  # ✅ fallback CORS header
+        return json_response
 
     except Exception as e:
         print("❌ GPT Error:", str(e))
-        return jsonify({ "error": str(e) }), 500
+        error_response = jsonify({ "error": str(e) })
+        error_response.headers.add("Access-Control-Allow-Origin", "*")  # ✅ fallback CORS header
+        return error_response, 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
