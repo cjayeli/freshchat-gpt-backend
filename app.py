@@ -1,72 +1,114 @@
-# app.py (Restore original /generate logic)
-from flask import Flask, request, jsonify
-import openai
-import os
-from flask_cors import CORS
-import logging
+# app.py (final RAG-ready version)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import openai
+import chromadb
+from chromadb.config import Settings
+import os
 
 app = Flask(__name__)
-CORS(app) # Allows all origins by default
+CORS(app, supports_credentials=True)
 
-logging.info("Flask app initializing...")
+# Load OpenAI API key
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-# Ensure API key is loaded - check Render env vars if issues arise
-client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-logging.info("OpenAI client initialized.")
+# Initialize ChromaDB client
+chroma_client = chromadb.Client(Settings(
+    chroma_db_impl="duckdb+parquet",
+    persist_directory="vectorstore"  # Path to your vectorstore directory
+))
 
-@app.route('/', methods=['GET'])
-def root():
-    logging.info("Root route '/' accessed.")
-    return jsonify({"message": "Backend is running!"})
+# Connect to your knowledge collection
+collection = chroma_client.get_or_create_collection(name="knowledge_base")
 
-# Restore original /generate route - remove GET if no longer needed for testing
-@app.route('/generate', methods=['POST'])
+# Load Help Center links mapping
+import json
+help_center_links_path = "knowledge/help_center_links.json"
+help_center_links = {}
+if os.path.exists(help_center_links_path):
+    with open(help_center_links_path, "r", encoding="utf-8") as f:
+        help_center_links = json.load(f)
+
+# System prompt based on your instructions
+system_prompt = """
+You are a virtual assistant for Fido, an African digital bank, specializing in digital lending.
+Your role is to assist Fido customer service agents by suggesting relevant responses based on their chat with customers.
+
+- Only provide suggestions using the uploaded knowledge files.
+- If you lack sufficient information, politely tell the agent you cannot reliably answer.
+- Keep your tone clear, friendly, and professional.
+- Be concise and solution-oriented.
+- If a process is involved (e.g., loan application, repayment), guide the agent on necessary steps.
+- Where applicable, provide a relevant Help Center article link based on provided tags.
+- Never invent information or suggest contacting support.
+- Maintain a helpful, respectful, and patient tone at all times.
+
+Respond in a way that the agent can send directly to the customer.
+"""
+
+@app.route('/generate', methods=['POST', 'OPTIONS'])
 def generate():
-    # Log entry point - Method logging is less useful now
-    logging.info("'/generate' route accessed.")
+    if request.method == 'OPTIONS':
+        response = jsonify({})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        return response, 200
+
     try:
-        # Use force=True cautiously, ensure client sends correct Content-Type
         data = request.get_json(force=True)
-        logging.info(f"Received request data type: {type(data)}")
-
-        if not isinstance(data, dict):
-            logging.error(f"Invalid JSON format received: {type(data)}")
-            return jsonify({"error": "Invalid JSON format"}), 400
-
         conversation = data.get("conversation", [])
-        logging.info(f"Received conversation length: {len(conversation)}")
 
         if not conversation:
-            logging.warning("No message history provided.")
-            # Return the structure expected by the frontend
-            return jsonify({"suggestions": ["No message history provided."]}), 200 # 200 OK might be better
+            return jsonify({"suggestions": ["No conversation provided."]}), 400
 
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a helpful customer support assistant. Reply based only on recent customer messages after CSAT."
-            }
-        ] + conversation
+        # Extract latest customer message
+        latest_messages = "\n".join([msg['content'] for msg in conversation if msg['role'] == 'user'])
 
-        logging.info("Calling OpenAI API...")
-        gpt_response = client.chat.completions.create(
-            model="gpt-4", # Make sure this model is appropriate/available
-            messages=messages,
-            temperature=0.7
+        # Embed customer message
+        embedded_query = openai.Embedding.create(
+            model="text-embedding-ada-002",
+            input=latest_messages
         )
-        logging.info("Received response from OpenAI API.")
+        query_embedding = embedded_query['data'][0]['embedding']
 
-        reply = gpt_response.choices[0].message.content.strip()
-        # *** Return the correct structure ***
-        return jsonify({ "suggestions": [reply] })
+        # Retrieve top 3 relevant knowledge chunks
+        search_results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=3,
+            include=['documents']
+        )
+
+        retrieved_chunks = search_results['documents'][0] if search_results['documents'] else []
+
+        if not retrieved_chunks:
+            context_info = "No relevant knowledge found."
+        else:
+            context_info = "\n\n".join(retrieved_chunks)
+
+        # Prepare prompt
+        messages = [
+            {"role": "system", "content": system_prompt + f"\n\nKnowledge Base:\n{context_info}"},
+            {"role": "user", "content": latest_messages}
+        ]
+
+        # Call GPT-4 for suggestion
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=messages,
+            temperature=0.4
+        )
+
+        reply = response.choices[0].message.content.strip()
+
+        return jsonify({"suggestions": [reply]})
 
     except Exception as e:
-        logging.exception("An error occurred in /generate endpoint")
-        # Return error structure
-        return jsonify({ "error": f"An error occurred: {str(e)}" }), 500
+        print("❌ Error in /generate:", str(e))
+        error_response = jsonify({"error": str(e)})
+        error_response.headers['Access-Control-Allow-Origin'] = '*'
+        return error_response, 500
 
-logging.info("Flask app routes defined.")
-
-# Gunicorn runs the 'app' object, this part below is not executed by Gunicorn
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

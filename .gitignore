@@ -172,3 +172,23 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Knowledge base (private)
+knowledge/
+
+# VSCode and MacOS junk
+.vscode/
+.DS_Store
+
+# Python environment settings
+*.env
