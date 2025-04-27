@@ -1,5 +1,3 @@
-# app.py (final RAG-ready version)
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import chromadb
@@ -91,9 +89,9 @@ def generate():
 
         # Simple local response when using only retrieved chunks (no external API)
         if not retrieved_chunks:
-            reply = "I'm sorry, I couldn't find enough information to confidently suggest a response based on the current knowledge base."
+            reply = "I'm sorry, I couldn't find enough information to confidently suggest a response. Please proceed based on your best judgment."
         else:
-            reply = f"Here is a suggested response based on the information available:\n\n{retrieved_chunks[0]}"
+            reply = retrieved_chunks[0].strip()
 
         return jsonify({"suggestions": [reply]})
 
