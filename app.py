@@ -16,7 +16,10 @@ openai.api_key = os.environ.get("OPENAI_API_KEY")
 chroma_client = chromadb.PersistentClient(path="./vectorstore")
 
 # Connect to your knowledge collection
-collection = chroma_client.get_collection(name="fido-support")
+try:
+    collection = chroma_client.get_collection(name="fido-support")
+except chromadb.errors.NotFoundError:
+    collection = chroma_client.create_collection(name="fido-support")
 
 # Load Help Center links mapping
 import json
