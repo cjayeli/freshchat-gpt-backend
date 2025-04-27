@@ -2,15 +2,16 @@
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import openai
 import chromadb
 import os
+from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# Load OpenAI API key
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+# Initialize local embedding model
+embedder = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Initialize ChromaDB persistent client
 chroma_client = chromadb.PersistentClient(path="./vectorstore")
@@ -65,12 +66,8 @@ def generate():
         # Extract latest customer message
         latest_messages = "\n".join([msg['content'] for msg in conversation if msg['role'] == 'user'])
 
-        # Embed customer message
-        embedded_query = openai.embeddings.create(
-            model="text-embedding-ada-002",
-            input=[latest_messages]
-        )
-        query_embedding = embedded_query.data[0].embedding
+        # Embed customer message using local model
+        query_embedding = embedder.encode(latest_messages).tolist()
 
         # Retrieve top 3 relevant knowledge chunks
         search_results = collection.query(
@@ -92,14 +89,11 @@ def generate():
             {"role": "user", "content": latest_messages}
         ]
 
-        # Call GPT-4 for suggestion
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=messages,
-            temperature=0.4
-        )
-
-        reply = response.choices[0].message.content.strip()
+        # Simple local response when using only retrieved chunks (no external API)
+        if not retrieved_chunks:
+            reply = "I'm sorry, I couldn't find enough information to confidently suggest a response based on the current knowledge base."
+        else:
+            reply = f"Here is a suggested response based on the information available:\n\n{retrieved_chunks[0]}"
 
         return jsonify({"suggestions": [reply]})
 
