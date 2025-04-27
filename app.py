@@ -66,7 +66,7 @@ def generate():
         latest_messages = "\n".join([msg['content'] for msg in conversation if msg['role'] == 'user'])
 
         # Embed customer message
-        embedded_query = client.embeddings.create(
+        embedded_query = openai.embeddings.create(
             model="text-embedding-ada-002",
             input=[latest_messages]
         )
