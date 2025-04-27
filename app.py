@@ -4,7 +4,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
 import chromadb
-from chromadb.config import Settings
 import os
 
 app = Flask(__name__)
@@ -13,14 +12,11 @@ CORS(app, supports_credentials=True)
 # Load OpenAI API key
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-# Initialize ChromaDB client
-chroma_client = chromadb.Client(Settings(
-    chroma_db_impl="duckdb+parquet",
-    persist_directory="vectorstore"  # Path to your vectorstore directory
-))
+# Initialize ChromaDB persistent client
+chroma_client = chromadb.PersistentClient(path="./vectorstore")
 
 # Connect to your knowledge collection
-collection = chroma_client.get_or_create_collection(name="knowledge_base")
+collection = chroma_client.get_collection(name="fido-support")
 
 # Load Help Center links mapping
 import json
@@ -67,11 +63,11 @@ def generate():
         latest_messages = "\n".join([msg['content'] for msg in conversation if msg['role'] == 'user'])
 
         # Embed customer message
-        embedded_query = openai.Embedding.create(
+        embedded_query = client.embeddings.create(
             model="text-embedding-ada-002",
-            input=latest_messages
+            input=[latest_messages]
         )
-        query_embedding = embedded_query['data'][0]['embedding']
+        query_embedding = embedded_query.data[0].embedding
 
         # Retrieve top 3 relevant knowledge chunks
         search_results = collection.query(
