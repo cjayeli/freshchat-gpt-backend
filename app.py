@@ -99,4 +99,4 @@ def generate():
         return error_response, 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), threaded=True, timeout=90)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), threaded=True)
