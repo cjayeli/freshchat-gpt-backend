@@ -65,12 +65,12 @@ def generate():
         latest_messages = "\n".join([msg['content'] for msg in conversation if msg['role'] == 'user'])
 
         # Embed customer message using local model
-        query_embedding = embedder.encode(latest_messages).tolist()
+        query_embedding = embedder.encode([latest_messages])[0].tolist()
 
-        # Retrieve top 3 relevant knowledge chunks
+        # Retrieve top 1 relevant knowledge chunk
         search_results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=3,
+            n_results=1,
             include=['documents']
         )
 
@@ -88,10 +88,7 @@ def generate():
         ]
 
         # Simple local response when using only retrieved chunks (no external API)
-        if not retrieved_chunks:
-            reply = "I'm sorry, I couldn't find enough information to confidently suggest a response. Please proceed based on your best judgment."
-        else:
-            reply = retrieved_chunks[0].strip()
+        reply = retrieved_chunks[0].strip() if retrieved_chunks else "I'm sorry, I couldn't find enough information to confidently suggest a response. Please proceed based on your best judgment."
 
         return jsonify({"suggestions": [reply]})
 
@@ -102,4 +99,4 @@ def generate():
         return error_response, 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), threaded=True, timeout=90)
